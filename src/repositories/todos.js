@@ -8,11 +8,21 @@ function fetchTodos() {
 }
 
 function saveTodos(todos) {
-    console.log("t1")
     const values = [['id', 'title', 'completed']];
-    todos.forEach(todo => {
-        values.push([todo.id, todo.title, todo.completed]);
-    });
-    console.log(todos)
-    SpreadsheetApp.getActiveSheet().clear().getRange(1, 1, values.length, 3).setValues(values);
+
+    const lock = LockService.getScriptLock();
+    if (lock.tryLock(10 * 1000)) {
+        try {
+            todos.forEach(todo => {
+                values.push([todo.id, todo.title, todo.completed]);
+            });
+            SpreadsheetApp.getActiveSheet().clear().getRange(1, 1, values.length, 3).setValues(values);
+        } catch (e) {
+            Logger.log("Can't write SpreadSheet." + e);
+        } finally {
+            lock.releaseLock();
+        }
+    } else {
+        Logger.log("Can't Lock SpreadSheet.");
+    }
 }
