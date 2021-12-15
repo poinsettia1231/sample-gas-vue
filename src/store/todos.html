@@ -1,0 +1,151 @@
+<script src="https://unpkg.com/vue@next"></script>
+<script>
+  // visibility filters
+  var filters = {
+    all: todos => {
+      return todos;
+    },
+    active: todos => {
+      return todos.filter(todo => {
+        return !todo.completed;
+      });
+    },
+    completed: todos => {
+      return todos.filter(todo => {
+        return todo.completed;
+      });
+    }
+  }
+
+  // app Vue instance
+  var app = Vue.createApp({
+    // app initial state
+    data() {
+      return {
+        todos: [],
+        newTodo: "",
+        editedTodo: null,
+        visibility: "all"
+      }
+    },
+    mounted() {
+      google.script.run
+        .withSuccessHandler(json => { this.todos = json })
+        .fetchTodos();
+    },
+    watch: {
+      todos: {
+        handler: todos => {
+          google.script.run
+            .withSuccessHandler()
+            .saveTodos(todos);
+        },
+        deep: true
+      }
+    },
+
+    // computed properties
+    // http://vuejs.org/guide/computed.html
+    computed: {
+      filteredTodos: function () {
+        return filters[this.visibility](this.todos);
+      },
+      remaining: function () {
+        return filters.active(this.todos).length;
+      },
+      allDone: {
+        get: function () {
+          return this.remaining === 0;
+        },
+        set: function (value) {
+          this.todos.forEach(todo => {
+            todo.completed = value;
+          });
+        }
+      }
+    },
+
+    // methods that implement data logic.
+    // note there's no DOM manipulation here at all.
+    methods: {
+      pluralize: function (n) {
+        return n === 1 ? "item" : "items";
+      },
+      addTodo: function () {
+        var value = this.newTodo && this.newTodo.trim();
+        if (!value) return;
+
+        this.todos.push({
+          id: 1, // TODO: ID取得ロジック
+          title: value,
+          completed: false
+        });
+        this.newTodo = "";
+      },
+
+      removeTodo: function (todo) {
+        this.todos.splice(this.todos.indexOf(todo), 1);
+      },
+
+      editTodo: function (todo) {
+        this.beforeEditCache = todo.title;
+        this.editedTodo = todo;
+      },
+
+      doneEdit: function (todo) {
+        if (!this.editedTodo) return;
+
+        this.editedTodo = null;
+        todo.title = todo.title.trim();
+        if (!todo.title) this.removeTodo(todo);
+      },
+
+      cancelEdit: function (todo) {
+        this.editedTodo = null;
+        todo.title = this.beforeEditCache;
+      },
+
+      removeCompleted: function () {
+        this.todos = filters.active(this.todos);
+      }
+    },
+
+    // a custom directive to wait for the DOM to be updated
+    // before focusing on the input field.
+    // http://vuejs.org/guide/custom-directive.html
+    directives: {
+      "todo-focus": {
+        updated(el, binding) {
+          if (binding.value) {
+            el.focus();
+          }
+        }
+      }
+    }
+  });
+
+  // handle routing
+  function onHashChange(e) {
+    var visibility = e.location.hash.replace(/#?\/?/, "");
+    if (filters[visibility]) {
+      vm.visibility = visibility;
+    } else {
+      e.location.hash = '';
+      vm.visibility = 'all';
+    }
+  }
+
+  // TODO:
+  // https://developers.google.com/apps-script/guides/html/reference/history#setChangeHandler(Function)
+  google.script.history.setChangeHandler(function (e) {
+    onHashChange(e);
+  });
+
+  // https://developers.google.com/apps-script/guides/html/reference/url#getLocation(Function)
+  google.script.url.getLocation(location => {
+    onHashChange({ location });
+  });
+
+  // mount
+  var vm = app.mount(".todoapp");
+</script>
